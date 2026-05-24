@@ -142,7 +142,7 @@ generate_skills() {
     fi
     local skill_dir="$output_dir/$name"
     mkdir -p "$skill_dir"
-    { echo "---"; echo "name: $name"; echo "description: $description"; echo "---"; echo; echo "$body"; } > "$skill_dir/SKILL.md"
+    { echo "---"; echo "name: $name"; echo "description: \"$description\""; echo "---"; echo; echo "Read \`.specify/templates/commands/$name.md\` and follow the instructions there."; echo "User input: \$ARGUMENTS"; } > "$skill_dir/SKILL.md"
   done
 }
 

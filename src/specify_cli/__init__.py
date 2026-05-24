@@ -950,8 +950,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
             if ext == "skill":
                 skill_dir = out_cmds / name
                 skill_dir.mkdir(parents=True, exist_ok=True)
-                skill_body = f"---\nname: {name}\ndescription: {description}\n---\n\n"
-                skill_body += body.split("---", 2)[-1].lstrip("\n") if body.startswith("---") else body
+                skill_body = f'---\nname: {name}\ndescription: "{description}"\n---\n\nRead `.specify/templates/commands/{name}.md` and follow the instructions there.\nUser input: $ARGUMENTS\n'
                 (skill_dir / "SKILL.md").write_text(skill_body, encoding="utf-8")
             else:
                 out_file = out_cmds / f"sp.{name}.{ext}"

@@ -232,7 +232,7 @@ function Generate-Skills {
 
         $skillDir = Join-Path $OutputDir $name
         New-Item -ItemType Directory -Path $skillDir -Force | Out-Null
-        $skillBody = "---`nname: $name`ndescription: $description`n---`n`n`n$body"
+        $skillBody = "---`nname: $name`ndescription: `"$description`"`n---`n`nRead ``.specify/templates/commands/$name.md`` and follow the instructions there.`nUser input: `$ARGUMENTS`n"
         Set-Content -Path (Join-Path $skillDir "SKILL.md") -Value $skillBody -NoNewline
     }
 }
