@@ -842,7 +842,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
         "qoder":        (".qoder/commands",      "md",       "$ARGUMENTS"),
         "shai":         (".shai/commands",       "md",       "$ARGUMENTS"),
         "bob":          (".bob/commands",        "md",       "$ARGUMENTS"),
-        "openclaude":   (".claude/commands", "md",       "$ARGUMENTS"),
+        "openclaude":   (".openclaude/skills", "skill",    "$ARGUMENTS"),
     }
 
     if ai_assistant not in commands_cfg:
@@ -949,8 +949,15 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
             if command_rules_content:
                 body = body + "\n\n---\n\n" + command_rules_content
 
-            out_file = out_cmds / f"sp.{name}.{ext}"
-            out_file.write_text(body, encoding="utf-8")
+            if ext == "skill":
+                skill_dir = out_cmds / name
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                skill_body = f"---\nname: {name}\ndescription: {description}\n---\n\n"
+                skill_body += body.split("---", 2)[-1].lstrip("\n") if body.startswith("---") else body
+                (skill_dir / "SKILL.md").write_text(skill_body, encoding="utf-8")
+            else:
+                out_file = out_cmds / f"sp.{name}.{ext}"
+                out_file.write_text(body, encoding="utf-8")
 
         # 5. Generate agent rules file
         agents_content = _read_file(_local("protocol-templates/AGENTS.md"), "protocol-templates/AGENTS.md")

@@ -117,6 +117,35 @@ generate_commands() {
   done
 }
 
+generate_skills() {
+  local agent=$1 arg_format=$2 output_dir=$3 script_variant=$4
+  mkdir -p "$output_dir"
+
+  local command_rules_content=""
+  if [[ -f "memory/command-rules.md" ]]; then
+    command_rules_content=$(tr -d '\r' < "memory/command-rules.md")
+  fi
+
+  for template in templates/commands/*.md; do
+    [[ -f "$template" ]] || continue
+    local name description script_command body
+    name=$(basename "$template" .md)
+    file_content=$(tr -d '\r' < "$template")
+    description=$(printf '%s\n' "$file_content" | awk '/^description:/ {sub(/^description:[[:space:]]*/, ""); print; exit}' || true)
+    script_command=$(printf '%s\n' "$file_content" | awk -v sv="$script_variant" '/^[[:space:]]*'"$script_variant"':[[:space:]]*/ {sub(/^[[:space:]]*'"$script_variant"':[[:space:]]*/, ""); print; exit}' || true)
+    [[ -z $script_command ]] && script_command="(Missing script command for $script_variant)"
+    body=$(printf '%s\n' "$file_content" | sed "s|{SCRIPT}|${script_command}|g")
+    body=$(printf '%s\n' "$body" | sed "s/{ARGS}/$arg_format/g" | sed "s/__AGENT__/$agent/g" | rewrite_paths)
+    body=$(printf '%s\n' "$body" | awk '/^---$/ { if (++dash_count == 1) { in_frontmatter=1; next } else { in_frontmatter=0; next } } in_frontmatter && /^scripts:$/ { skip=1; next } in_frontmatter && /^agent_scripts:$/ { skip=1; next } in_frontmatter && /^[a-zA-Z].*:/ && skip { skip=0 } in_frontmatter && skip && /^[[:space:]]/ { next } { print }')
+    if [[ -n $command_rules_content ]]; then
+      body=$(printf '%s\n\n---\n\n%s' "$body" "$command_rules_content")
+    fi
+    local skill_dir="$output_dir/$name"
+    mkdir -p "$skill_dir"
+    { echo "---"; echo "name: $name"; echo "description: $description"; echo "---"; echo; echo "$body"; } > "$skill_dir/SKILL.md"
+  done
+}
+
 generate_copilot_prompts() {
   local agents_dir=$1 prompts_dir=$2
   mkdir -p "$prompts_dir"
@@ -395,8 +424,7 @@ This file is generated during init for the selected agent.
       generate_commands bob md "\$ARGUMENTS" "$base_dir/.bob/commands" "$script"
       generate_agent_rules bob "$base_dir" ;;
     openclaude)
-      mkdir -p "$base_dir/.claude/commands"
-      generate_commands openclaude md "\$ARGUMENTS" "$base_dir/.claude/commands" "$script"
+      generate_skills openclaude "\$ARGUMENTS" "$base_dir/.openclaude/skills" "$script"
       generate_agent_rules openclaude "$base_dir" ;;
   esac
   ( cd "$base_dir" && zip -r "../spec-kit-template-${agent}-${script}-${NEW_VERSION}.zip" . )

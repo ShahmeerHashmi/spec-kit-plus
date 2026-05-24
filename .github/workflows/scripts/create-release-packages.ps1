@@ -178,6 +178,65 @@ function Generate-Commands {
     }
 }
 
+function Generate-Skills {
+    param(
+        [string]$Agent,
+        [string]$ArgFormat,
+        [string]$OutputDir,
+        [string]$ScriptVariant
+    )
+
+    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+
+    $templates = Get-ChildItem -Path "templates/commands/*.md" -File -ErrorAction SilentlyContinue
+
+    foreach ($template in $templates) {
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($template.Name)
+        $fileContent = (Get-Content -Path $template.FullName -Raw) -replace "`r`n", "`n"
+
+        $description = ""
+        if ($fileContent -match '(?m)^description:\s*(.+)$') {
+            $description = $matches[1]
+        }
+
+        $scriptCommand = ""
+        if ($fileContent -match "(?m)^\s*${ScriptVariant}:\s*(.+)$") {
+            $scriptCommand = $matches[1]
+        }
+        if ([string]::IsNullOrEmpty($scriptCommand)) {
+            $scriptCommand = "(Missing script command for $ScriptVariant)"
+        }
+
+        $body = $fileContent -replace '\{SCRIPT\}', $scriptCommand
+        $body = $body -replace '\{ARGS\}', $ArgFormat
+        $body = $body -replace '__AGENT__', $Agent
+        $body = Rewrite-Paths -Content $body
+
+        $lines = $body -split "`n"
+        $outputLines = @()
+        $inFrontmatter = $false; $skipScripts = $false; $dashCount = 0
+        foreach ($line in $lines) {
+            if ($line -match '^---$') {
+                $outputLines += $line; $dashCount++
+                if ($dashCount -eq 1) { $inFrontmatter = $true } else { $inFrontmatter = $false }
+                continue
+            }
+            if ($inFrontmatter) {
+                if ($line -match '^(scripts|agent_scripts):$') { $skipScripts = $true; continue }
+                if ($line -match '^[a-zA-Z].*:' -and $skipScripts) { $skipScripts = $false }
+                if ($skipScripts -and $line -match '^\s+') { continue }
+            }
+            $outputLines += $line
+        }
+        $body = $outputLines -join "`n"
+
+        $skillDir = Join-Path $OutputDir $name
+        New-Item -ItemType Directory -Path $skillDir -Force | Out-Null
+        $skillBody = "---`nname: $name`ndescription: $description`n---`n`n`n$body"
+        Set-Content -Path (Join-Path $skillDir "SKILL.md") -Value $skillBody -NoNewline
+    }
+}
+
 function Generate-CopilotPrompts {
     param(
         [string]$AgentsDir,
@@ -348,8 +407,8 @@ function Build-Variant {
             Generate-Commands -Agent 'qoder' -Extension 'md' -ArgFormat '$ARGUMENTS' -OutputDir $cmdDir -ScriptVariant $Script
         }
         'openclaude' {
-            $cmdDir = Join-Path $baseDir ".claude/commands"
-            Generate-Commands -Agent 'openclaude' -Extension 'md' -ArgFormat '$ARGUMENTS' -OutputDir $cmdDir -ScriptVariant $Script
+            $skillsDir = Join-Path $baseDir ".openclaude/skills"
+            Generate-Skills -Agent 'openclaude' -ArgFormat '$ARGUMENTS' -OutputDir $skillsDir -ScriptVariant $Script
         }
     }
     
