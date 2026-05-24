@@ -75,7 +75,6 @@ AMP_FILE="$REPO_ROOT/AGENTS.md"
 SHAI_FILE="$REPO_ROOT/SHAI.md"
 Q_FILE="$REPO_ROOT/AGENTS.md"
 BOB_FILE="$REPO_ROOT/AGENTS.md"
-OPENCLAUDE_FILE="$REPO_ROOT/OPENCLAUDE.md"
 
 # Template file
 TEMPLATE_FILE="$REPO_ROOT/.specify/templates/agent-file-template.md"
@@ -635,7 +634,7 @@ update_specific_agent() {
             update_agent_file "$BOB_FILE" "IBM Bob"
             ;;
         openclaude)
-            update_agent_file "$OPENCLAUDE_FILE" "OpenClaude"
+            update_agent_file "$CLAUDE_FILE" "OpenClaude"
             ;;
         *)
             log_error "Unknown agent type '$agent_type'"
@@ -721,11 +720,6 @@ update_all_existing_agents() {
     
     if [[ -f "$BOB_FILE" ]]; then
         update_agent_file "$BOB_FILE" "IBM Bob"
-        found_agent=true
-    fi
-
-    if [[ -f "$OPENCLAUDE_FILE" ]]; then
-        update_agent_file "$OPENCLAUDE_FILE" "OpenClaude"
         found_agent=true
     fi
 

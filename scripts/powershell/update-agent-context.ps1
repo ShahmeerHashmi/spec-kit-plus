@@ -60,7 +60,6 @@ $AMP_FILE      = Join-Path $REPO_ROOT 'AGENTS.md'
 $SHAI_FILE     = Join-Path $REPO_ROOT 'SHAI.md'
 $Q_FILE        = Join-Path $REPO_ROOT 'AGENTS.md'
 $BOB_FILE      = Join-Path $REPO_ROOT 'AGENTS.md'
-$OPENCLAUDE_FILE = Join-Path $REPO_ROOT 'OPENCLAUDE.md'
 
 $TEMPLATE_FILE = Join-Path $REPO_ROOT '.specify/templates/agent-file-template.md'
 
@@ -389,7 +388,7 @@ function Update-SpecificAgent {
         'shai'     { Update-AgentFile -TargetFile $SHAI_FILE     -AgentName 'SHAI' }
         'q'        { Update-AgentFile -TargetFile $Q_FILE        -AgentName 'Amazon Q Developer CLI' }
         'bob'      { Update-AgentFile -TargetFile $BOB_FILE      -AgentName 'IBM Bob' }
-        'openclaude' { Update-AgentFile -TargetFile $OPENCLAUDE_FILE -AgentName 'OpenClaude' }
+        'openclaude' { Update-AgentFile -TargetFile $CLAUDE_FILE -AgentName 'OpenClaude' }
         default { Write-Err "Unknown agent type '$Type'"; Write-Err 'Expected: claude|gemini|copilot|cursor-agent|qwen|opencode|codex|windsurf|kilocode|auggie|roo|codebuddy|amp|shai|q|bob|qoder|openclaude'; return $false }
     }
 }
@@ -412,7 +411,6 @@ function Update-AllExistingAgents {
     if (Test-Path $SHAI_FILE)     { if (-not (Update-AgentFile -TargetFile $SHAI_FILE     -AgentName 'SHAI')) { $ok = $false }; $found = $true }
     if (Test-Path $Q_FILE)        { if (-not (Update-AgentFile -TargetFile $Q_FILE        -AgentName 'Amazon Q Developer CLI')) { $ok = $false }; $found = $true }
     if (Test-Path $BOB_FILE)      { if (-not (Update-AgentFile -TargetFile $BOB_FILE      -AgentName 'IBM Bob')) { $ok = $false }; $found = $true }
-    if (Test-Path $OPENCLAUDE_FILE) { if (-not (Update-AgentFile -TargetFile $OPENCLAUDE_FILE -AgentName 'OpenClaude')) { $ok = $false }; $found = $true }
     if (-not $found) {
         Write-Info 'No existing agent files found, creating default Claude file...'
         if (-not (Update-AgentFile -TargetFile $CLAUDE_FILE -AgentName 'Claude Code')) { $ok = $false }

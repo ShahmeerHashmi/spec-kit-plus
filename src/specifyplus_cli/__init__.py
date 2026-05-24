@@ -229,7 +229,7 @@ AGENT_CONFIG = {
     },
     "openclaude": {
         "name": "OpenClaude",
-        "folder": ".openclaude/",
+        "folder": ".claude/",
         "install_url": "https://github.com/Gitlawb/openclaude",
         "requires_cli": True,
     },
@@ -815,7 +815,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
         "qoder":        (".qoder/commands",      "md",       "$ARGUMENTS"),
         "shai":         (".shai/commands",       "md",       "$ARGUMENTS"),
         "bob":          (".bob/commands",        "md",       "$ARGUMENTS"),
-        "openclaude":   (".openclaude/commands", "md",       "$ARGUMENTS"),
+        "openclaude":   (".claude/commands", "md",       "$ARGUMENTS"),
     }
 
     if ai_assistant not in commands_cfg:
@@ -939,7 +939,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
                 "windsurf": "WINDSURF.md", "codex": "AGENTS.md", "kilocode": "AGENTS.md",
                 "auggie": "AGENTS.md", "roo": "ROO.md", "codebuddy": "AGENTS.md",
                 "amp": "AGENTS.md", "q": "AGENTS.md", "qoder": "AGENTS.md",
-                "shai": "SHAI.md", "bob": "AGENTS.md", "openclaude": "OPENCLAUDE.md",
+                "shai": "SHAI.md", "bob": "AGENTS.md", "openclaude": "CLAUDE.md",
             }
             rules_target = rules_map.get(ai_assistant, "AGENTS.md")
             (base / rules_target).write_text(full_content, encoding="utf-8")
