@@ -6,7 +6,7 @@ set -euo pipefail
 # Usage: .github/workflows/scripts/create-release-packages.sh <version>
 #   Version argument should include leading 'v'.
 #   Optionally set AGENTS and/or SCRIPTS env vars to limit what gets built.
-#     AGENTS  : space or comma separated subset of: claude gemini copilot cursor-agent qwen opencode windsurf codex amp shai bob (default: all)
+#     AGENTS  : space or comma separated subset of: claude gemini copilot cursor-agent qwen opencode windsurf codex amp shai bob qoder openclaude (default: all)
 #     SCRIPTS : space or comma separated subset of: sh ps (default: both)
 #   Examples:
 #     AGENTS=claude SCRIPTS=sh $0 v0.2.0
@@ -224,6 +224,7 @@ build_variant() {
       qoder) agent_name="Qoder" ;;
       shai) agent_name="OVHcloud SHAI" ;;
       bob) agent_name="IBM Bob IDE" ;;
+      openclaude) agent_name="OpenClaude" ;;
       *) agent_name="$agent" ;;
     esac
     
@@ -312,6 +313,10 @@ This file is generated during init for the selected agent.
         echo "$full_content" > "$base_dir/.bob/rules/guidelines.md"
         echo "Generated .bob/rules/guidelines.md"
         ;;
+      openclaude)
+        echo "$full_content" > "$base_dir/OPENCLAUDE.md"
+        echo "Generated OPENCLAUDE.md"
+        ;;
     esac
   }
 
@@ -389,13 +394,17 @@ This file is generated during init for the selected agent.
       mkdir -p "$base_dir/.bob/commands"
       generate_commands bob md "\$ARGUMENTS" "$base_dir/.bob/commands" "$script"
       generate_agent_rules bob "$base_dir" ;;
+    openclaude)
+      mkdir -p "$base_dir/.openclaude/commands"
+      generate_commands openclaude md "\$ARGUMENTS" "$base_dir/.openclaude/commands" "$script"
+      generate_agent_rules openclaude "$base_dir" ;;
   esac
   ( cd "$base_dir" && zip -r "../spec-kit-template-${agent}-${script}-${NEW_VERSION}.zip" . )
   echo "Created $GENRELEASES_DIR/spec-kit-template-${agent}-${script}-${NEW_VERSION}.zip"
 }
 
 # Determine agent list
-ALL_AGENTS=(claude gemini copilot cursor-agent qwen opencode windsurf codex kilocode auggie roo codebuddy amp shai q bob qoder)
+ALL_AGENTS=(claude gemini copilot cursor-agent qwen opencode windsurf codex kilocode auggie roo codebuddy amp shai q bob qoder openclaude)
 ALL_SCRIPTS=(sh ps)
 
 norm_list() {

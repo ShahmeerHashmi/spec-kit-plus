@@ -227,6 +227,12 @@ AGENT_CONFIG = {
         "install_url": "https://ibm.com/bob",
         "requires_cli": False,  # IDE-based
     },
+    "openclaude": {
+        "name": "OpenClaude",
+        "folder": ".openclaude/",
+        "install_url": "https://github.com/Gitlawb/openclaude",
+        "requires_cli": True,
+    },
 }
 
 SCRIPT_TYPE_CHOICES = {"sh": "POSIX Shell (bash/zsh)", "ps": "PowerShell"}
@@ -769,6 +775,194 @@ def download_template_from_github(ai_assistant: str, download_dir: Path, *, scri
     }
     return zip_path, metadata
 
+def _find_repo_root() -> Path | None:
+    """Walk up from this file to find the repo root (has templates/ and protocol-templates/)."""
+    d = Path(__file__).resolve().parent
+    for _ in range(6):
+        if (d / "templates" / "commands").is_dir() and (d / "protocol-templates").is_dir():
+            return d
+        d = d.parent
+    return None
+
+def _rewrite_paths(text: str) -> str:
+    """Replace bare paths with .specify/ prefixed paths (mirrors rewrite_paths in build script)."""
+    import re
+    text = re.sub(r'(?<!\.specify/)(/?)memory/', r'.specify/memory/', text)
+    text = re.sub(r'(?<!\.specify/)(/?)scripts/', r'.specify/scripts/', text)
+    text = re.sub(r'(?<!\.specify/)(/?)templates/', r'.specify/templates/', text)
+    return text
+
+def _build_template_locally(ai_assistant: str, script_type: str, download_dir: Path, *, verbose: bool = True) -> Tuple[Path, dict]:
+    """Build a template ZIP from the repo's source files when GitHub download fails."""
+    repo_root = _find_repo_root()
+    if repo_root is None:
+        raise FileNotFoundError("Cannot locate repo root (need templates/commands/ and protocol-templates/)")
+
+    commands_cfg = {
+        "claude":       (".claude/commands",    "md",       "$ARGUMENTS"),
+        "gemini":       (".gemini/commands",    "toml",     "{{args}}"),
+        "copilot":      (".github/agents",      "agent.md", "$ARGUMENTS"),
+        "cursor-agent": (".cursor/commands",     "md",       "$ARGUMENTS"),
+        "qwen":         (".qwen/commands",      "toml",     "{{args}}"),
+        "opencode":     (".opencode/command",    "md",       "$ARGUMENTS"),
+        "windsurf":     (".windsurf/workflows",  "md",       "$ARGUMENTS"),
+        "codex":        (".codex/prompts",       "md",       "$ARGUMENTS"),
+        "kilocode":     (".kilocode/workflows",  "md",       "$ARGUMENTS"),
+        "auggie":       (".augment/commands",    "md",       "$ARGUMENTS"),
+        "roo":          (".roo/commands",        "md",       "$ARGUMENTS"),
+        "codebuddy":    (".codebuddy/commands",  "md",       "$ARGUMENTS"),
+        "amp":          (".agents/commands",     "md",       "$ARGUMENTS"),
+        "qoder":        (".qoder/commands",      "md",       "$ARGUMENTS"),
+        "shai":         (".shai/commands",       "md",       "$ARGUMENTS"),
+        "bob":          (".bob/commands",        "md",       "$ARGUMENTS"),
+        "openclaude":   (".openclaude/commands", "md",       "$ARGUMENTS"),
+    }
+
+    if ai_assistant not in commands_cfg:
+        raise ValueError(f"Unknown agent: {ai_assistant}")
+
+    cmd_dir, ext, arg_fmt = commands_cfg[ai_assistant]
+
+    # Load command-rules.md content
+    command_rules_path = repo_root / "memory" / "command-rules.md"
+    command_rules_content = command_rules_path.read_text(encoding="utf-8").strip() if command_rules_path.exists() else ""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        base = Path(tmpdir) / f"sdd-{ai_assistant}-package-{script_type}"
+
+        # 1. Copy .specify/memory
+        spec_mem = base / ".specify" / "memory"
+        src_mem = repo_root / "memory"
+        if src_mem.is_dir():
+            shutil.copytree(src_mem, spec_mem, dirs_exist_ok=True)
+            (spec_mem / "command-rules.md").unlink(missing_ok=True)
+            plus = spec_mem / "constitutionplus.md"
+            if plus.exists():
+                target = spec_mem / "constitution.md"
+                shutil.copy2(plus, target)
+                plus.unlink()
+
+        # 2. Copy .specify/scripts (variant only)
+        spec_scripts = base / ".specify" / "scripts"
+        script_src = "bash" if script_type == "sh" else "powershell"
+        src_scripts = repo_root / "scripts" / script_src
+        if src_scripts.is_dir():
+            shutil.copytree(src_scripts, spec_scripts / script_src, dirs_exist_ok=True)
+
+        # 3. Copy .specify/templates (excluding commands and vscode-settings)
+        spec_tpl = base / ".specify" / "templates"
+        src_tpl = repo_root / "templates"
+        if src_tpl.is_dir():
+            for item in src_tpl.rglob("*"):
+                if item.is_file():
+                    rel = item.relative_to(src_tpl)
+                    if rel.parts[0] == "commands" or item.name == "vscode-settings.json":
+                        continue
+                    dest = spec_tpl / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(item, dest)
+
+        # 4. Generate commands
+        out_cmds = base / cmd_dir
+        out_cmds.mkdir(parents=True, exist_ok=True)
+        for tpl in sorted((repo_root / "templates" / "commands").glob("*.md")):
+            raw = tpl.read_text(encoding="utf-8")
+            name = tpl.stem
+
+            # Extract description from frontmatter
+            description = ""
+            script_command = ""
+            for line in raw.split("\n"):
+                if line.startswith("description:"):
+                    description = line.split(":", 1)[1].strip()
+                if f"  {script_type}:" in line or f"\t{script_type}:" in line:
+                    script_command = line.split(":", 1)[1].strip()
+
+            body = raw
+            if script_command:
+                body = body.replace("{SCRIPT}", script_command)
+            body = body.replace("{ARGS}", arg_fmt)
+            body = body.replace("__AGENT__", ai_assistant)
+            body = _rewrite_paths(body)
+
+            # Strip scripts/agent_scripts sections from frontmatter
+            lines = body.split("\n")
+            filtered = []
+            in_front = False
+            dash_count = 0
+            skip = False
+            for line in lines:
+                if line.strip() == "---":
+                    dash_count += 1
+                    if dash_count == 1:
+                        in_front = True
+                    else:
+                        in_front = False
+                    filtered.append(line)
+                    continue
+                if in_front and (line.startswith("scripts:") or line.startswith("agent_scripts:")):
+                    skip = True
+                    continue
+                if in_front and skip:
+                    if line and not line[0].isspace():
+                        skip = False
+                        filtered.append(line)
+                    continue
+                filtered.append(line)
+            body = "\n".join(filtered)
+
+            if command_rules_content:
+                body = body + "\n\n---\n\n" + command_rules_content
+
+            out_file = out_cmds / f"sp.{name}.{ext}"
+            out_file.write_text(body, encoding="utf-8")
+
+        # 5. Generate agent rules file
+        agents_tpl = repo_root / "protocol-templates" / "AGENTS.md"
+        if agents_tpl.exists():
+            agents_content = agents_tpl.read_text(encoding="utf-8").strip()
+            agent_names = {
+                "claude": "Claude Code", "gemini": "Gemini CLI", "copilot": "GitHub Copilot",
+                "cursor-agent": "Cursor", "qwen": "Qwen Code", "opencode": "opencode",
+                "windsurf": "Windsurf", "codex": "Codex CLI", "kilocode": "Kilo Code",
+                "auggie": "Auggie CLI", "roo": "Roo Code", "codebuddy": "CodeBuddy",
+                "amp": "AWS Amplify AI", "q": "Amazon Q Developer CLI", "qoder": "Qoder",
+                "shai": "OVHcloud SHAI", "bob": "IBM Bob IDE", "openclaude": "OpenClaude",
+            }
+            aname = agent_names.get(ai_assistant, ai_assistant)
+            preface = f"# {aname} Rules\n\nThis file is generated during init for the selected agent.\n\n"
+            full_content = preface + agents_content
+
+            rules_map = {
+                "claude": "CLAUDE.md", "gemini": "GEMINI.md", "copilot": "GITHUB_COPILOT.md",
+                "cursor-agent": "CURSOR.md", "qwen": "QWEN.md", "opencode": "AGENTS.md",
+                "windsurf": "WINDSURF.md", "codex": "AGENTS.md", "kilocode": "AGENTS.md",
+                "auggie": "AGENTS.md", "roo": "ROO.md", "codebuddy": "AGENTS.md",
+                "amp": "AGENTS.md", "q": "AGENTS.md", "qoder": "AGENTS.md",
+                "shai": "SHAI.md", "bob": "AGENTS.md", "openclaude": "OPENCLAUDE.md",
+            }
+            rules_target = rules_map.get(ai_assistant, "AGENTS.md")
+            (base / rules_target).write_text(full_content, encoding="utf-8")
+
+        # 6. Create ZIP
+        zip_name = f"spec-kit-template-{ai_assistant}-{script_type}.zip"
+        zip_path = download_dir / zip_name
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in base.rglob("*"):
+                if item.is_file():
+                    zf.write(item, item.relative_to(base))
+
+        file_size = zip_path.stat().st_size
+        if verbose:
+            console.print(f"[cyan]Built template locally:[/cyan] {zip_name} ({file_size:,} bytes)")
+
+        return zip_path, {
+            "filename": zip_name,
+            "size": file_size,
+            "release": "local-build",
+            "asset_url": str(zip_path),
+        }
+
 def download_and_extract_template(project_path: Path, ai_assistant: str, script_type: str, is_current_dir: bool = False, *, verbose: bool = True, tracker: StepTracker | None = None, client: httpx.Client = None, debug: bool = False, github_token: str = None) -> Path:
     """Download the latest release and extract it to create a new project.
     Returns project_path. Uses tracker if provided (with keys: fetch, download, extract, cleanup)
@@ -793,12 +987,25 @@ def download_and_extract_template(project_path: Path, ai_assistant: str, script_
             tracker.add("download", "Download template")
             tracker.complete("download", meta['filename'])
     except Exception as e:
-        if tracker:
-            tracker.error("fetch", str(e))
-        else:
-            if verbose:
-                console.print(f"[red]Error downloading template:[/red] {e}")
-        raise
+        # Fall back to local template build if repo source files are available
+        try:
+            if tracker:
+                tracker.complete("fetch", "GitHub unavailable, building locally")
+            elif verbose:
+                console.print(f"[yellow]GitHub download failed:[/yellow] {e}")
+                console.print("[cyan]Building template from local source files...[/cyan]")
+            zip_path, meta = _build_template_locally(
+                ai_assistant, script_type, current_dir, verbose=verbose and tracker is None
+            )
+            if tracker:
+                tracker.add("download", "Build template locally")
+                tracker.complete("download", meta['filename'])
+        except Exception as local_err:
+            if tracker:
+                tracker.error("fetch", f"GitHub: {e} | Local: {local_err}")
+            elif verbose:
+                console.print(f"[red]Local build also failed:[/red] {local_err}")
+            raise e from local_err
 
     if tracker:
         tracker.add("extract", "Extract template")
@@ -966,7 +1173,7 @@ def ensure_executable_scripts(project_path: Path, tracker: StepTracker | None = 
 @app.command()
 def init(
     project_name: str = typer.Argument(None, help="Name for your new project directory (optional if using --here, or use '.' for current directory)"),
-    ai_assistant: str = typer.Option(None, "--ai", help="AI assistant to use: claude, gemini, copilot, cursor-agent, qwen, opencode, codex, windsurf, kilocode, auggie, codebuddy, amp, or q"),
+    ai_assistant: str = typer.Option(None, "--ai", help="AI assistant to use: claude, gemini, copilot, cursor-agent, qwen, opencode, codex, windsurf, kilocode, auggie, codebuddy, amp, shai, q, bob, qoder, or openclaude"),
     script_type: str = typer.Option(None, "--script", help="Script type to use: sh or ps"),
     ignore_agent_tools: bool = typer.Option(False, "--ignore-agent-tools", help="Skip checks for AI agent tools like Claude Code"),
     no_git: bool = typer.Option(False, "--no-git", help="Skip git repository initialization"),

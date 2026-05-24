@@ -50,5 +50,7 @@ gh release create "$VERSION" \
   .genreleases/spec-kit-template-q-ps-"$VERSION".zip \
   .genreleases/spec-kit-template-bob-sh-"$VERSION".zip \
   .genreleases/spec-kit-template-bob-ps-"$VERSION".zip \
+  .genreleases/spec-kit-template-openclaude-sh-"$VERSION".zip \
+  .genreleases/spec-kit-template-openclaude-ps-"$VERSION".zip \
   --title "Spec Kit Plus Templates - $VERSION_NO_V" \
   --notes-file release_notes.md
