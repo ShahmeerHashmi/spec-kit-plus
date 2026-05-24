@@ -407,7 +407,7 @@ function Build-Variant {
             Generate-Commands -Agent 'qoder' -Extension 'md' -ArgFormat '$ARGUMENTS' -OutputDir $cmdDir -ScriptVariant $Script
         }
         'openclaude' {
-            $skillsDir = Join-Path $baseDir ".openclaude/skills"
+            $skillsDir = Join-Path $baseDir ".claude/skills"
             Generate-Skills -Agent 'openclaude' -ArgFormat '$ARGUMENTS' -OutputDir $skillsDir -ScriptVariant $Script
         }
     }

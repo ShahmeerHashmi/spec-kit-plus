@@ -842,7 +842,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
         "qoder":        (".qoder/commands",      "md",       "$ARGUMENTS"),
         "shai":         (".shai/commands",       "md",       "$ARGUMENTS"),
         "bob":          (".bob/commands",        "md",       "$ARGUMENTS"),
-        "openclaude":   (".openclaude/skills", "skill",    "$ARGUMENTS"),
+        "openclaude":   (".claude/skills", "skill",    "$ARGUMENTS"),
     }
 
     if ai_assistant not in commands_cfg:
