@@ -348,7 +348,7 @@ function Build-Variant {
             Generate-Commands -Agent 'qoder' -Extension 'md' -ArgFormat '$ARGUMENTS' -OutputDir $cmdDir -ScriptVariant $Script
         }
         'openclaude' {
-            $cmdDir = Join-Path $baseDir ".claude/commands"
+            $cmdDir = Join-Path $baseDir ".openclaude/commands"
             Generate-Commands -Agent 'openclaude' -Extension 'md' -ArgFormat '$ARGUMENTS' -OutputDir $cmdDir -ScriptVariant $Script
         }
     }

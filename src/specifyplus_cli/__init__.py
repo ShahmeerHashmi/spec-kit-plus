@@ -133,7 +133,7 @@ AGENT_CONFIG = {
     },
     "claude": {
         "name": "Claude Code",
-        "folder": ".claude/",
+        "folder": ".openclaude/",
         "install_url": "https://docs.anthropic.com/en/docs/claude-code/setup",
         "requires_cli": True,
     },
@@ -229,7 +229,7 @@ AGENT_CONFIG = {
     },
     "openclaude": {
         "name": "OpenClaude",
-        "folder": ".claude/",
+        "folder": ".openclaude/",
         "install_url": "https://github.com/Gitlawb/openclaude",
         "requires_cli": True,
     },
@@ -842,7 +842,7 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
         "qoder":        (".qoder/commands",      "md",       "$ARGUMENTS"),
         "shai":         (".shai/commands",       "md",       "$ARGUMENTS"),
         "bob":          (".bob/commands",        "md",       "$ARGUMENTS"),
-        "openclaude":   (".claude/commands", "md",       "$ARGUMENTS"),
+        "openclaude":   (".openclaude/commands", "md",       "$ARGUMENTS"),
     }
 
     if ai_assistant not in commands_cfg:
