@@ -395,8 +395,8 @@ This file is generated during init for the selected agent.
       generate_commands bob md "\$ARGUMENTS" "$base_dir/.bob/commands" "$script"
       generate_agent_rules bob "$base_dir" ;;
     openclaude)
-      mkdir -p "$base_dir/.openclaude/commands"
-      generate_commands openclaude md "\$ARGUMENTS" "$base_dir/.openclaude/commands" "$script"
+      mkdir -p "$base_dir/.claude/commands"
+      generate_commands openclaude md "\$ARGUMENTS" "$base_dir/.claude/commands" "$script"
       generate_agent_rules openclaude "$base_dir" ;;
   esac
   ( cd "$base_dir" && zip -r "../spec-kit-template-${agent}-${script}-${NEW_VERSION}.zip" . )
