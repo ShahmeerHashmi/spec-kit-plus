@@ -792,11 +792,38 @@ def _rewrite_paths(text: str) -> str:
     text = re.sub(r'(?<!\.specify/)(/?)templates/', r'.specify/templates/', text)
     return text
 
+_GITHUB_RAW_BASE = "https://raw.githubusercontent.com/ShahmeerHashmi/spec-kit-plus/main"
+
+def _read_file(path: Path | None, github_path: str, *, local_only: bool = False) -> str | None:
+    """Read file from local path or fetch from GitHub raw."""
+    if path and path.exists():
+        return path.read_text(encoding="utf-8")
+    if local_only:
+        return None
+    try:
+        resp = httpx.get(f"{_GITHUB_RAW_BASE}/{github_path}", timeout=15, follow_redirects=True, verify=ssl_context)
+        if resp.status_code == 200:
+            return resp.text
+    except Exception:
+        pass
+    return None
+
+def _list_dir(path: Path | None, github_path: str) -> list[str]:
+    """List files from local dir or GitHub API."""
+    if path and path.is_dir():
+        return [f.name for f in path.iterdir() if f.is_file()]
+    try:
+        api_url = f"https://api.github.com/repos/ShahmeerHashmi/spec-kit-plus/contents/{github_path}"
+        resp = httpx.get(api_url, timeout=15, follow_redirects=True, verify=ssl_context)
+        if resp.status_code == 200:
+            return [item["name"] for item in resp.json() if item.get("type") == "file"]
+    except Exception:
+        pass
+    return []
+
 def _build_template_locally(ai_assistant: str, script_type: str, download_dir: Path, *, verbose: bool = True) -> Tuple[Path, dict]:
-    """Build a template ZIP from the repo's source files when GitHub download fails."""
+    """Build a template ZIP from repo source files or GitHub raw when GitHub release download fails."""
     repo_root = _find_repo_root()
-    if repo_root is None:
-        raise FileNotFoundError("Cannot locate repo root (need templates/commands/ and protocol-templates/)")
 
     commands_cfg = {
         "claude":       (".claude/commands",    "md",       "$ARGUMENTS"),
@@ -823,51 +850,59 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
 
     cmd_dir, ext, arg_fmt = commands_cfg[ai_assistant]
 
+    # Helper to resolve local path or None
+    def _local(rel: str) -> Path | None:
+        return (repo_root / rel) if repo_root else None
+
     # Load command-rules.md content
-    command_rules_path = repo_root / "memory" / "command-rules.md"
-    command_rules_content = command_rules_path.read_text(encoding="utf-8").strip() if command_rules_path.exists() else ""
+    command_rules_content = (_read_file(_local("memory/command-rules.md"), "memory/command-rules.md") or "").strip()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir) / f"sdd-{ai_assistant}-package-{script_type}"
 
         # 1. Copy .specify/memory
         spec_mem = base / ".specify" / "memory"
-        src_mem = repo_root / "memory"
-        if src_mem.is_dir():
-            shutil.copytree(src_mem, spec_mem, dirs_exist_ok=True)
-            (spec_mem / "command-rules.md").unlink(missing_ok=True)
-            plus = spec_mem / "constitutionplus.md"
-            if plus.exists():
-                target = spec_mem / "constitution.md"
-                shutil.copy2(plus, target)
-                plus.unlink()
+        memory_files = _list_dir(_local("memory"), "memory")
+        for fname in memory_files:
+            if fname == "command-rules.md":
+                continue
+            content = _read_file(_local(f"memory/{fname}"), f"memory/{fname}")
+            if content:
+                spec_mem.mkdir(parents=True, exist_ok=True)
+                target_name = "constitution.md" if fname == "constitutionplus.md" else fname
+                (spec_mem / target_name).write_text(content, encoding="utf-8")
 
         # 2. Copy .specify/scripts (variant only)
-        spec_scripts = base / ".specify" / "scripts"
         script_src = "bash" if script_type == "sh" else "powershell"
-        src_scripts = repo_root / "scripts" / script_src
-        if src_scripts.is_dir():
-            shutil.copytree(src_scripts, spec_scripts / script_src, dirs_exist_ok=True)
+        script_files = _list_dir(_local(f"scripts/{script_src}"), f"scripts/{script_src}")
+        for fname in script_files:
+            content = _read_file(_local(f"scripts/{script_src}/{fname}"), f"scripts/{script_src}/{fname}")
+            if content:
+                dest = base / ".specify" / "scripts" / script_src / fname
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content, encoding="utf-8")
 
         # 3. Copy .specify/templates (excluding commands and vscode-settings)
-        spec_tpl = base / ".specify" / "templates"
-        src_tpl = repo_root / "templates"
-        if src_tpl.is_dir():
-            for item in src_tpl.rglob("*"):
-                if item.is_file():
-                    rel = item.relative_to(src_tpl)
-                    if rel.parts[0] == "commands" or item.name == "vscode-settings.json":
-                        continue
-                    dest = spec_tpl / rel
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(item, dest)
+        template_files = _list_dir(_local("templates"), "templates")
+        for fname in template_files:
+            if fname == "commands" or fname == "vscode-settings.json":
+                continue
+            content = _read_file(_local(f"templates/{fname}"), f"templates/{fname}")
+            if content:
+                dest = base / ".specify" / "templates" / fname
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content, encoding="utf-8")
 
         # 4. Generate commands
         out_cmds = base / cmd_dir
         out_cmds.mkdir(parents=True, exist_ok=True)
-        for tpl in sorted((repo_root / "templates" / "commands").glob("*.md")):
-            raw = tpl.read_text(encoding="utf-8")
-            name = tpl.stem
+        cmd_template_names = _list_dir(_local("templates/commands"), "templates/commands")
+        cmd_template_names = sorted([n for n in cmd_template_names if n.endswith(".md")])
+        for tpl_name in cmd_template_names:
+            raw = _read_file(_local(f"templates/commands/{tpl_name}"), f"templates/commands/{tpl_name}")
+            if not raw:
+                continue
+            name = Path(tpl_name).stem
 
             # Extract description from frontmatter
             description = ""
@@ -918,9 +953,9 @@ def _build_template_locally(ai_assistant: str, script_type: str, download_dir: P
             out_file.write_text(body, encoding="utf-8")
 
         # 5. Generate agent rules file
-        agents_tpl = repo_root / "protocol-templates" / "AGENTS.md"
-        if agents_tpl.exists():
-            agents_content = agents_tpl.read_text(encoding="utf-8").strip()
+        agents_content = _read_file(_local("protocol-templates/AGENTS.md"), "protocol-templates/AGENTS.md")
+        if agents_content:
+            agents_content = agents_content.strip()
             agent_names = {
                 "claude": "Claude Code", "gemini": "Gemini CLI", "copilot": "GitHub Copilot",
                 "cursor-agent": "Cursor", "qwen": "Qwen Code", "opencode": "opencode",
@@ -986,7 +1021,7 @@ def download_and_extract_template(project_path: Path, ai_assistant: str, script_
             tracker.complete("fetch", f"release {meta['release']} ({meta['size']:,} bytes)")
             tracker.add("download", "Download template")
             tracker.complete("download", meta['filename'])
-    except Exception as e:
+    except (Exception, typer.Exit) as e:
         # Fall back to local template build if repo source files are available
         try:
             if tracker:
